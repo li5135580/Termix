@@ -13,7 +13,7 @@ mkdir -p /app/data
 rm -f /app/data/*.sqlite-wal 2>/dev/null || true
 rm -f /app/data/*.sqlite-shm 2>/dev/null || true
 
-rclone copy r2:termix-backup /app/data \
+rclone copy r2:termix-backup/ /app/data \
     --fast-list \
     --transfers 2 \
     --checkers 4 \
