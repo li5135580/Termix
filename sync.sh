@@ -26,6 +26,7 @@ while true; do
         --checkers 4 \
         --exclude "*.sqlite-shm" \
         --exclude "*.sqlite-wal" \
+        --exclude "opkssh/**"
         --exclude "*.log" \
         --exclude "tmp/**" \
         --exclude "cache/**" \
