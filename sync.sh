@@ -21,7 +21,7 @@ if [ -f /app/data/termix.db ]; then
 
 fi
 
-rclone copy /app/data r2:termix-backup \
+rclone copy /app/data/ r2:termix-backup \
     --fast-list \
     --transfers 2 \
     --checkers 4 \
@@ -40,5 +40,3 @@ rclone copy /app/data r2:termix-backup \
     --buffer-size 4M || true
 
 echo "$(date): Sync completed"
-
-sleep 180
