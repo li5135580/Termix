@@ -1,4 +1,4 @@
-# Stage 1
+# Stage 1: Install dependencies
 FROM node:24-slim AS deps
 WORKDIR /app
 
@@ -8,9 +8,10 @@ COPY package*.json ./
 COPY .npmrc ./
 COPY vendor ./vendor
 
-RUN npm ci --ignore-scripts && npm cache clean --force
+RUN npm ci --ignore-scripts && \
+    npm cache clean --force
 
-# Stage 2
+# Stage 2: Build frontend
 FROM deps AS frontend-builder
 WORKDIR /app
 
@@ -18,20 +19,96 @@ COPY . .
 
 RUN find public/fonts -name "*.ttf" ! -name "*Regular.ttf" ! -name "*Bold.ttf" ! -name "*Italic.ttf" -delete
 
-RUN NODE_OPTIONS="--max-old-space-size=3072" npm run build
+RUN npm cache clean --force && \
+    NODE_OPTIONS="--max-old-space-size=3072" npm run build
 
-# Stage 3
+# Stage 3: Build backend
 FROM deps AS backend-builder
 WORKDIR /app
 
 COPY . .
 
 RUN npm rebuild better-sqlite3
+
 RUN npm run build:backend
 
-# Stage 4
+# Stage 4: Production dependencies only
+FROM node:24-slim AS production-deps
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+
+COPY package*.json ./
+COPY .npmrc ./
+COPY vendor ./vendor
+
+RUN npm ci --omit=dev --ignore-scripts && \
+    npm rebuild better-sqlite3 bcryptjs && \
+    npm cache clean --force
+
+# Stage 5: Final optimized image
 FROM node:24-slim
 
 WORKDIR /app
+
+ENV DATA_DIR=/app/data \
+    PORT=8080 \
+    NODE_ENV=production
+
+RUN apt-get update && apt-get install -y \
+    nginx \
+    gettext-base \
+    openssl \
+    ca-certificates \
+    gosu \
+    wget \
+    curl \
+    unzip \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 rclone
+RUN curl https://rclone.org/install.sh | bash
+
+# 创建目录
+RUN mkdir -p \
+    /app/data \
+    /app/uploads \
+    /app/data/.opk \
+    /app/nginx \
+    /tmp/nginx \
+    /root/.config/rclone
+
+RUN chown -R node:node /app /tmp/nginx
+
+COPY docker/nginx.conf /app/nginx/nginx.conf.template
+COPY docker/nginx-https.conf /app/nginx/nginx-https.conf.template
+
+COPY --chown=node:node --from=frontend-builder /app/dist /app/html
+COPY --chown=node:node --from=frontend-builder /app/src/locales /app/html/locales
+COPY --chown=node:node --from=frontend-builder /app/public/fonts /app/html/fonts
+
+COPY --chown=node:node --from=production-deps /app/node_modules /app/node_modules
+COPY --chown=node:node --from=backend-builder /app/dist/backend ./dist/backend
+
+COPY --chown=node:node package.json ./
+
+# 复制同步脚本
+COPY sync.sh /sync.sh
+COPY restore.sh /restore.sh
+
+RUN chmod +x /sync.sh
+RUN chmod +x /restore.sh
+
+VOLUME ["/app/data"]
+
+EXPOSE 8080 30001 30002 30003 30004 30005 30006
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD wget -q -O /dev/null http://localhost:30001/health || exit 1
+
+COPY docker/entrypoint.sh /entrypoint.sh
+
+RUN chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]
