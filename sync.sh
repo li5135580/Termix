@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -Eeuo pipefail
+set -eu
 
 export RCLONE_CONFIG=/home/node/.config/rclone/rclone.conf
 
