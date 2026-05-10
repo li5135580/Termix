@@ -147,19 +147,32 @@ export class OPKSSHBinaryManager {
   }
 
   private static async getLatestRelease(): Promise<GitHubRelease> {
-    const url = `https://api.github.com/repos/${OPKSSH_REPO}/releases/latest`;
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Termix",
-      },
-    });
+  const url = `https://api.github.com/repos/${OPKSSH_REPO}/releases/latest`;
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch release info: ${response.statusText}`);
-    }
+  const headers: Record<string, string> = {
+    "User-Agent": "Termix",
+    Accept: "application/vnd.github+json",
+  };
 
-    return (await response.json()) as GitHubRelease;
+  // 使用 GitHub Token 避免 API 限流
+  if (process.env.GITHUB_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
+
+  const response = await fetch(url, {
+    headers,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+
+    throw new Error(
+      `Failed to fetch release info: ${response.status} ${response.statusText} - ${text}`,
+    );
+  }
+
+  return (await response.json()) as GitHubRelease;
+}
 
   private static findMatchingAsset(assets: GitHubAsset[]): GitHubAsset | null {
     const platform = process.platform;
