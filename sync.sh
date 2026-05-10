@@ -4,7 +4,7 @@ while true
 do
     echo "Syncing to R2..."
 
-    rclone --config /app/.config/rclone/rclone.conf sync /app/data r2:termix-backup \
+    rclone --config /app/.config/rclone/rclone.conf copy /app/data r2:termix-backup \
       --fast-list \
       --transfers 4 \
       --checkers 8 \
@@ -12,5 +12,5 @@ do
       --exclude "cache/**" \
       --exclude "tmp/**"
 
-    sleep 30
+    sleep 300
 done
