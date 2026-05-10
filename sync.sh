@@ -1,41 +1,44 @@
 #!/bin/bash
 
+set -Eeuo pipefail
+
+export RCLONE_CONFIG=/home/node/.config/rclone/rclone.conf
+
 LOCK_FILE="/tmp/r2-sync.lock"
 
 exec 200>$LOCK_FILE
 
-trap "exit 0" SIGTERM SIGINT
+flock -n 200 || exit 0
 
-while true; do
+echo "========================================"
+echo "$(date): Syncing to R2..."
+echo "========================================"
 
-    flock -n 200 || {
-        sleep 10
-        continue
-    }
+if [ -f /app/data/termix.db ]; then
 
-    echo "$(date): Syncing to R2..."
-
-    if [ -f /app/data/termix.db ]; then
-        sqlite3 /app/data/termix.db \
+    sqlite3 /app/data/termix.db \
         "PRAGMA wal_checkpoint(TRUNCATE);" || true
-    fi
 
-    rclone copy /app/data r2:termix-backup \
-        --fast-list \
-        --transfers 2 \
-        --checkers 4 \
-        --exclude "*.sqlite-shm" \
-        --exclude "*.sqlite-wal" \
-        --exclude "opkssh/**"
-        --exclude "*.log" \
-        --exclude "tmp/**" \
-        --exclude "cache/**" \
-        --ignore-errors \
-        --retries 3 \
-        --low-level-retries 10 || true
+fi
 
-    echo "$(date): Sync completed"
+rclone copy /app/data r2:termix-backup \
+    --fast-list \
+    --transfers 2 \
+    --checkers 4 \
+    --create-empty-src-dirs \
+    --ignore-errors \
+    --retries 3 \
+    --low-level-retries 10 \
+    --exclude "*.log" \
+    --exclude "*.sqlite-shm" \
+    --exclude "*.sqlite-wal" \
+    --exclude "cache/**" \
+    --exclude "tmp/**" \
+    --exclude ".DS_Store" \
+    --exclude "opkssh/**" \
+    --s3-upload-concurrency 2 \
+    --buffer-size 4M || true
 
-    sleep 180
+echo "$(date): Sync completed"
 
-done
+sleep 180
