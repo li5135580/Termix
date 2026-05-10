@@ -35,6 +35,6 @@ while true; do
 
     echo "$(date): Sync completed"
 
-    sleep 30
+    sleep 180
 
 done
