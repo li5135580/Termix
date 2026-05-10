@@ -257,7 +257,7 @@ echo "========================================"
 
         bash /sync.sh || true
 
-        sleep 10
+        sleep 300
 
     done
 ) &
