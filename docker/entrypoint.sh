@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
-set -Eeuo pipefail
+set -eu
 
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
