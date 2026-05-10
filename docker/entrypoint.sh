@@ -68,12 +68,14 @@ mkdir -p \
     /app/data \
     /app/uploads \
     /app/data/ssl \
-    /home/node/.config/rclone
+    /home/node/.config/rclone \
+    /app/data/opkssh
 
 chmod 755 \
     /app/data \
     /app/uploads \
-    /app/data/ssl 2>/dev/null || true
+    /app/data/ssl \
+    /app/data/opkssh 2>/dev/null || true
 
 # =========================
 # Nginx Config
@@ -113,6 +115,8 @@ echo "========================================"
 
 [ -w /app/uploads ] && echo "Uploads writable" || echo "WARNING: uploads not writable"
 
+[ -w /app/data/opkssh ] && echo "OPKSSH writable" || echo "WARNING: OPKSSH not writable"
+
 # =========================
 # Rclone Config
 # =========================
@@ -127,7 +131,7 @@ type = s3
 provider = Cloudflare
 access_key_id = ${R2_ACCESS_KEY_ID}
 secret_access_key = ${R2_SECRET_ACCESS_KEY}
-endpoint = ${R2_ENDPOINT}
+endpoint = https://${R2_ENDPOINT}
 acl = private
 no_check_bucket = true
 EOF
@@ -255,7 +259,17 @@ echo "========================================"
 (
     while true; do
 
-        bash /sync.sh || true
+        echo "$(date): Syncing to R2..."
+
+        rclone copy /app/data/ r2:termix-backup \
+            --transfers=1 \
+            --checkers=1 \
+            --fast-list \
+            --ignore-errors \
+            --exclude "*.sqlite-shm" \
+            --exclude "*.sqlite-wal" || true
+
+        echo "$(date): Sync completed"
 
         sleep 300
 
