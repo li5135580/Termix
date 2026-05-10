@@ -165,6 +165,7 @@ async function fetchGitHubAPI<T>(
     const response = await fetch(url, {
       headers: {
         Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
         "User-Agent": "TermixUpdateChecker/1.0",
         "X-GitHub-Api-Version": "2022-11-28",
       },
