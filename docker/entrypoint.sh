@@ -1,88 +1,127 @@
 #!/bin/sh
-set -e
+
+set -Eeuo pipefail
 
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
+# =========================
+# User Permission Setup
+# =========================
+
 if [ "$(id -u)" = "0" ]; then
+
     if [ "$PUID" = "0" ]; then
-        echo "Running as root (PUID=0, PGID=$PGID)"
-        chown -R root:root /app/data /app/uploads /tmp/nginx 2>/dev/null || true
+
+        echo "Running as root (PUID=0 PGID=$PGID)"
+
+        chown -R root:root \
+            /app/data \
+            /app/uploads \
+            /tmp/nginx \
+            /home/node/.config 2>/dev/null || true
+
     else
-        echo "Setting up user permissions (PUID: $PUID, PGID: $PGID)..."
+
+        echo "Setting up user permissions (PUID=$PUID PGID=$PGID)"
 
         groupmod -o -g "$PGID" node 2>/dev/null || true
         usermod -o -u "$PUID" node 2>/dev/null || true
 
-        chown -R node:node /app/data /app/uploads /tmp/nginx 2>/dev/null || true
+        mkdir -p /home/node/.config/rclone
 
-        echo "User node is now UID: $PUID, GID: $PGID"
+        chown -R node:node \
+            /app/data \
+            /app/uploads \
+            /tmp/nginx \
+            /home/node/.config 2>/dev/null || true
+
+        echo "User node is now UID=$PUID GID=$PGID"
 
         exec gosu node:node "$0" "$@"
+
     fi
+
 fi
+
+# =========================
+# ENV
+# =========================
 
 export PORT=${PORT:-8080}
 export ENABLE_SSL=${ENABLE_SSL:-false}
 export SSL_PORT=${SSL_PORT:-8443}
+
 export SSL_CERT_PATH=${SSL_CERT_PATH:-/app/data/ssl/termix.crt}
 export SSL_KEY_PATH=${SSL_KEY_PATH:-/app/data/ssl/termix.key}
 
+export DATA_DIR=${DATA_DIR:-/app/data}
+
+export RCLONE_CONFIG=/home/node/.config/rclone/rclone.conf
+
+# =========================
+# Directories
+# =========================
+
+mkdir -p \
+    /tmp/nginx \
+    /app/data \
+    /app/uploads \
+    /app/data/ssl \
+    /home/node/.config/rclone
+
+chmod 755 \
+    /app/data \
+    /app/uploads \
+    /app/data/ssl 2>/dev/null || true
+
+# =========================
+# Nginx Config
+# =========================
+
 echo "========================================"
-echo "Configuring web UI to run on port: $PORT"
+echo "Configuring web UI on port $PORT"
 echo "========================================"
 
 if [ "$ENABLE_SSL" = "true" ]; then
-    echo "SSL enabled - using HTTPS configuration with redirect"
+
+    echo "SSL ENABLED"
+
     NGINX_CONF_SOURCE="/app/nginx/nginx-https.conf.template"
+
 else
-    echo "SSL disabled - using HTTP-only configuration (default)"
+
+    echo "SSL DISABLED"
+
     NGINX_CONF_SOURCE="/app/nginx/nginx.conf.template"
+
 fi
 
-mkdir -p /tmp/nginx
+envsubst '${PORT} ${SSL_PORT} ${SSL_CERT_PATH} ${SSL_KEY_PATH}' \
+    < "$NGINX_CONF_SOURCE" \
+    > /tmp/nginx/nginx.conf
 
-envsubst '${PORT} ${SSL_PORT} ${SSL_CERT_PATH} ${SSL_KEY_PATH}' < $NGINX_CONF_SOURCE > /tmp/nginx/nginx.conf
-
-mkdir -p /app/data
-mkdir -p /app/uploads
-mkdir -p /app/data/.opk
-mkdir -p /app/.config/rclone
-
-chmod 755 /app/data /app/uploads /app/data/.opk 2>/dev/null || true
+# =========================
+# Writable Check
+# =========================
 
 echo "========================================"
-echo "Checking data directories"
+echo "Checking directories"
 echo "========================================"
 
-if [ -w /app/data ]; then
-    echo "Data directory is writable"
-else
-    echo "WARNING: Data directory is not writable"
-    ls -ld /app/data
-fi
+[ -w /app/data ] && echo "Data writable" || echo "WARNING: data not writable"
 
-if [ -w /app/data/.opk ]; then
-    echo "OPKSSH directory is writable"
-else
-    echo "WARNING: OPKSSH directory is not writable"
-    ls -ld /app/data/.opk
-fi
+[ -w /app/uploads ] && echo "Uploads writable" || echo "WARNING: uploads not writable"
 
-OPKSSH_DIR="${DATA_DIR:-/app/data}/opkssh"
-
-if [ ! -d "$OPKSSH_DIR" ]; then
-    echo "WARNING: OPKSSH binary directory not found at $OPKSSH_DIR"
-    echo "OPKSSH will be downloaded automatically on first use."
-else
-    echo "OPKSSH binary directory found at $OPKSSH_DIR"
-fi
+# =========================
+# Rclone Config
+# =========================
 
 echo "========================================"
 echo "Creating rclone config"
 echo "========================================"
 
-cat > /app/.config/rclone/rclone.conf <<EOF
+cat > "$RCLONE_CONFIG" <<EOF
 [r2]
 type = s3
 provider = Cloudflare
@@ -90,47 +129,54 @@ access_key_id = ${R2_ACCESS_KEY_ID}
 secret_access_key = ${R2_SECRET_ACCESS_KEY}
 endpoint = ${R2_ENDPOINT}
 acl = private
+no_check_bucket = true
 EOF
+
+chmod 600 "$RCLONE_CONFIG"
+
+echo "========================================"
+echo "Testing R2 connection"
+echo "========================================"
+
+rclone lsd r2: >/dev/null 2>&1 || {
+    echo "CRITICAL: R2 connection failed"
+    exit 1
+}
+
+echo "R2 connection successful"
+
+# =========================
+# Restore
+# =========================
 
 echo "========================================"
 echo "Restoring backup from R2"
 echo "========================================"
 
-bash /restore.sh || true
+bash /restore.sh || {
+    echo "WARNING: restore failed"
+}
 
-echo "========================================"
-echo "Starting background R2 sync"
-echo "========================================"
+# =========================
+# SQLite Safety
+# =========================
 
-bash /sync.sh &
+rm -f /app/data/*.sqlite-wal 2>/dev/null || true
+rm -f /app/data/*.sqlite-shm 2>/dev/null || true
+
+# =========================
+# SSL
+# =========================
 
 if [ "$ENABLE_SSL" = "true" ]; then
-    echo "========================================"
-    echo "Checking SSL certificate configuration"
-    echo "========================================"
-
-    mkdir -p /app/data/ssl
-    chmod 755 /app/data/ssl 2>/dev/null || true
 
     DOMAIN=${SSL_DOMAIN:-localhost}
 
-    if [ -f "/app/data/ssl/termix.crt" ] && [ -f "/app/data/ssl/termix.key" ]; then
-        echo "SSL certificates found, checking validity..."
+    if [ ! -f "$SSL_CERT_PATH" ] || [ ! -f "$SSL_KEY_PATH" ]; then
 
-        if openssl x509 -in /app/data/ssl/termix.crt -checkend 2592000 -noout >/dev/null 2>&1; then
-            echo "SSL certificates are valid and will be reused for domain: $DOMAIN"
-        else
-            echo "SSL certificate expired or expiring soon, regenerating..."
-            rm -f /app/data/ssl/termix.crt /app/data/ssl/termix.key
-        fi
-    else
-        echo "SSL certificates not found, generating..."
-    fi
+        echo "Generating SSL certificate"
 
-    if [ ! -f "/app/data/ssl/termix.crt" ] || [ ! -f "/app/data/ssl/termix.key" ]; then
-        echo "Generating SSL certificates for domain: $DOMAIN"
-
-cat > /app/data/ssl/openssl.conf << EOF
+        cat > /app/data/ssl/openssl.conf <<EOF
 [req]
 default_bits = 2048
 prompt = no
@@ -143,7 +189,7 @@ C=US
 ST=State
 L=City
 O=Termix
-OU=IT Department
+OU=IT
 CN=$DOMAIN
 
 [v3_req]
@@ -154,35 +200,71 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = $DOMAIN
 DNS.2 = localhost
-DNS.3 = 127.0.0.1
 IP.1 = 127.0.0.1
-IP.2 = ::1
-IP.3 = 0.0.0.0
 EOF
 
-        openssl genrsa -out /app/data/ssl/termix.key 2048
+        openssl genrsa -out "$SSL_KEY_PATH" 2048
 
         openssl req -new -x509 \
-            -key /app/data/ssl/termix.key \
-            -out /app/data/ssl/termix.crt \
+            -key "$SSL_KEY_PATH" \
+            -out "$SSL_CERT_PATH" \
             -days 365 \
             -config /app/data/ssl/openssl.conf \
             -extensions v3_req
 
-        chmod 600 /app/data/ssl/termix.key
-        chmod 644 /app/data/ssl/termix.crt
+        chmod 600 "$SSL_KEY_PATH"
+        chmod 644 "$SSL_CERT_PATH"
 
         rm -f /app/data/ssl/openssl.conf
 
-        echo "SSL certificates generated successfully"
     fi
+
 fi
+
+# =========================
+# Start nginx
+# =========================
 
 echo "========================================"
 echo "Starting nginx"
 echo "========================================"
 
-nginx -c /tmp/nginx/nginx.conf
+nginx -c /tmp/nginx/nginx.conf || {
+    echo "CRITICAL: nginx failed"
+    exit 1
+}
+
+# =========================
+# Delay Sync Startup
+# =========================
+
+echo "========================================"
+echo "Waiting for backend stabilization"
+echo "========================================"
+
+sleep 15
+
+# =========================
+# Background Sync
+# =========================
+
+echo "========================================"
+echo "Starting background R2 sync"
+echo "========================================"
+
+(
+    while true; do
+
+        bash /sync.sh || true
+
+        sleep 10
+
+    done
+) &
+
+# =========================
+# Start Backend
+# =========================
 
 echo "========================================"
 echo "Starting backend services"
@@ -192,22 +274,12 @@ cd /app
 
 export NODE_ENV=production
 
-if [ -f "package.json" ]; then
+if [ -f package.json ]; then
+
     VERSION=$(grep '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
-    
-    if [ -n "$VERSION" ]; then
-        export VERSION
-    else
-        echo "Warning: Could not extract version from package.json"
-    fi
-else
-    echo "Warning: package.json not found"
+
+    [ -n "$VERSION" ] && export VERSION
+
 fi
 
-node dist/backend/backend/starter.js
-
-echo "========================================"
-echo "All services started"
-echo "========================================"
-
-tail -f /dev/null
+exec node dist/backend/backend/starter.js
