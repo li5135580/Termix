@@ -64,17 +64,18 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     unzip \
+    rclone \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 rclone
-RUN curl https://rclone.org/install.sh | bash
+RUN apt-get update && apt-get install -y rclone && rm -rf /var/lib/apt/lists/*
 
 # 创建目录
 RUN mkdir -p \
     /app/data \
     /app/uploads \
-    /app/data/.opk \
+    /app/data/opkssh \
     /app/nginx \
     /tmp/nginx \
     /root/.config/rclone
