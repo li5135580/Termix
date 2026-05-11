@@ -29,11 +29,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # 2. 提取 Docker 标签 (latest, 分支名等)
-      - name: Extract metadata
+      - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY  }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # 只生成 latest 标签
+            type=raw,value=latest
 
       # 3. 构建并推送
       - name: Build and push Docker image
