@@ -140,7 +140,6 @@ export const GuacamoleDisplay = forwardRef<
 
         const width = connectionConfig.width ?? containerWidth ?? 1280;
         const height = connectionConfig.height ?? containerHeight ?? 720;
-        const dpi = protocol === "rdp" ? (connectionConfig.dpi ?? 96) : null;
 
         const wsBase = isDev
           ? `ws://localhost:30008`
@@ -171,9 +170,6 @@ export const GuacamoleDisplay = forwardRef<
           width: String(width),
           height: String(height),
         });
-        if (dpi !== null && dpi !== undefined) {
-          params.set("dpi", String(dpi));
-        }
         return `${wsBase}?${params.toString()}`;
       } catch (error) {
         const errorMessage =
@@ -387,7 +383,7 @@ export const GuacamoleDisplay = forwardRef<
           data += text;
         };
         reader.onend = () => {
-          navigator.clipboard.writeText(data).catch(() => {});
+          navigator.clipboard?.writeText?.(data).catch(() => {});
         };
       }
     };
@@ -506,7 +502,7 @@ export const GuacamoleDisplay = forwardRef<
 
   const syncClipboard = useCallback(() => {
     const client = clientRef.current;
-    if (!client) return;
+    if (!client || !navigator.clipboard?.readText) return;
     navigator.clipboard
       .readText()
       .then((text) => {
