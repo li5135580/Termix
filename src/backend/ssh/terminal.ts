@@ -1514,8 +1514,10 @@ wss.on("connection", async (ws: WebSocket, req) => {
             }
             ws.send(
               JSON.stringify({
-                type: "error",
-                message: "Shell error: " + err.message,
+                type: isNoResponseErr ? "warning" : "error",
+                message: isNoResponseErr
+                  ? "Shell unavailable: " + err.message + ". The remote server may be slow or not accepting shell requests."
+                  : "Shell error: " + err.message,
               }),
             );
             if (currentSessionId) {
@@ -2025,12 +2027,18 @@ wss.on("connection", async (ws: WebSocket, req) => {
           authType: resolvedCredentials.authType,
         });
         sendLog("auth", "error", `Authentication failed: ${err.message}`);
+      } else if (isKeepaliveTimeout || isNoResponse) {
+        sendLog("error", "warn", `Connection unstable: ${err.message}. The remote server may be slow or temporarily unreachable.`);
       } else {
         sendLog("error", "error", `Connection failed: ${err.message}`);
       }
 
       let errorMessage = "SSH error: " + err.message;
-      if (err.message.includes("No matching key exchange algorithm")) {
+      let messageType = "error";
+      if (isKeepaliveTimeout || isNoResponse) {
+        errorMessage = "Connection lost: " + err.message + ". The remote server may be slow or temporarily unreachable. Retrying may help.";
+        messageType = "warning";
+      } else if (err.message.includes("No matching key exchange algorithm")) {
         errorMessage =
           "SSH error: No compatible key exchange algorithm found. This may be due to an older SSH server or network device.";
       } else if (err.message.includes("No matching cipher")) {
@@ -2070,7 +2078,7 @@ wss.on("connection", async (ws: WebSocket, req) => {
           "SSH error: Authentication failed. Please check your username and password/key.";
       }
 
-      ws.send(JSON.stringify({ type: "error", message: errorMessage }));
+      ws.send(JSON.stringify({ type: messageType, message: errorMessage }));
       if (currentSessionId) {
         sessionManager.destroySession(currentSessionId);
         currentSessionId = null;
@@ -2109,9 +2117,9 @@ wss.on("connection", async (ws: WebSocket, req) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(
             JSON.stringify({
-              type: "error",
+              type: "warning",
               message:
-                "Connection closed during shell initialization. The server may have rejected the shell request.",
+                "Connection closed during shell initialization. The server may have rejected the shell request or is temporarily unavailable.",
             }),
           );
         }
