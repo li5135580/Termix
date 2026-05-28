@@ -994,6 +994,25 @@ class PollingManager {
       pollingBackoff.reset(refreshedHost.id);
       authFailureTracker.reset(refreshedHost.id);
     } catch (error) {
+      const isHostKeyError =
+        error instanceof Error &&
+        (error.message.includes("Host denied") ||
+          error.message.includes("verification failed"));
+
+      if (isHostKeyError) {
+        // Host key mismatch — user needs to accept new key via Terminal first.
+        // Don't flood logs with errors for this expected security behavior.
+        const alreadyTracked = authFailureTracker.shouldSkip(host.id);
+        if (!alreadyTracked) {
+          statsLogger.warn("Stats collector skipped — host key needs verification via Terminal", {
+            operation: "stats_connect_skipped_host_key",
+            hostId: refreshedHost.id,
+            hint: "Open a Terminal connection to this host to accept the new host key.",
+          });
+        }
+        return;
+      }
+
       const isAuthError =
         error instanceof Error &&
         (error.message.includes("authentication") ||

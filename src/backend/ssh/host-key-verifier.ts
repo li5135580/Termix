@@ -162,18 +162,33 @@ export class SSHHostKeyVerifier {
             return;
           }
 
-          sshLogger.error("Host key mismatch detected - SECURITY WARNING", {
-            operation: "host_key_mismatch",
-            hostId,
-            ip,
-            port,
-            oldFingerprint: host.hostKeyFingerprint,
-            newFingerprint: fingerprint,
-            oldKeyType: host.hostKeyType,
-            newKeyType: keyType,
-            userId,
-            changeCount: host.hostKeyChangedCount || 0,
-          });
+          if (ws) {
+            sshLogger.error("Host key mismatch detected - SECURITY WARNING", {
+              operation: "host_key_mismatch",
+              hostId,
+              ip,
+              port,
+              oldFingerprint: host.hostKeyFingerprint,
+              newFingerprint: fingerprint,
+              oldKeyType: host.hostKeyType,
+              newKeyType: keyType,
+              userId,
+              changeCount: host.hostKeyChangedCount || 0,
+            });
+          } else {
+            sshLogger.warn("Host key mismatch — background connection skipped", {
+              operation: "host_key_mismatch_background",
+              hostId,
+              ip,
+              port,
+              oldFingerprint: host.hostKeyFingerprint,
+              newFingerprint: fingerprint,
+              oldKeyType: host.hostKeyType,
+              newKeyType: keyType,
+              userId,
+              changeCount: host.hostKeyChangedCount || 0,
+            });
+          }
 
           if (isJumpHost) {
             await this.updateHostKey(
@@ -198,8 +213,8 @@ export class SSHHostKeyVerifier {
           }
 
           if (!ws) {
-            sshLogger.error(
-              "Host key changed - please connect via Terminal to verify the new key",
+            sshLogger.warn(
+              "Host key changed — connect via Terminal to accept the new key",
               {
                 operation: "host_key_no_ws_reject",
                 hostId,
