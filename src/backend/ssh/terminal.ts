@@ -1494,13 +1494,24 @@ wss.on("connection", async (ws: WebSocket, req) => {
           isShellInitializing = false;
 
           if (err) {
-            sshLogger.error("Shell error", err, {
-              operation: "ssh_shell",
-              hostId: id,
-              ip,
-              port,
-              username,
-            });
+            const isNoResponseErr = err.message.includes("No response from server");
+            if (isNoResponseErr) {
+              sshLogger.warn("Shell unavailable - remote server not responding", {
+                operation: "ssh_shell_no_response",
+                hostId: id,
+                ip,
+                port,
+                username,
+              });
+            } else {
+              sshLogger.error("Shell error", err, {
+                operation: "ssh_shell",
+                hostId: id,
+                ip,
+                port,
+                username,
+              });
+            }
             ws.send(
               JSON.stringify({
                 type: "error",
@@ -1985,11 +1996,22 @@ wss.on("connection", async (ws: WebSocket, req) => {
         return;
       }
 
-      sshLogger.error("Proceeding with cleanup after error", {
-        operation: "ssh_error_cleanup",
-        hostId: id,
-        error: err.message,
-      });
+      const isKeepaliveTimeout = err.message.includes("Keepalive timeout");
+      const isNoResponse = err.message.includes("No response from server");
+
+      if (isKeepaliveTimeout || isNoResponse) {
+        sshLogger.warn("SSH connection lost - remote server may be slow or unreachable", {
+          operation: "ssh_connection_lost",
+          hostId: id,
+          error: err.message,
+        });
+      } else {
+        sshLogger.error("Proceeding with cleanup after error", {
+          operation: "ssh_error_cleanup",
+          hostId: id,
+          error: err.message,
+        });
+      }
 
       if (
         err.message.includes("authentication") ||
@@ -2171,9 +2193,9 @@ wss.on("connection", async (ws: WebSocket, req) => {
       keepaliveInterval:
         typeof hostKeepaliveInterval === "number"
           ? hostKeepaliveInterval
-          : 30000,
+          : 45000,
       keepaliveCountMax:
-        typeof hostKeepaliveCountMax === "number" ? hostKeepaliveCountMax : 3,
+        typeof hostKeepaliveCountMax === "number" ? hostKeepaliveCountMax : 5,
       readyTimeout: 120000,
       tcpKeepAlive: true,
       tcpKeepAliveInitialDelay: 30000,
