@@ -288,7 +288,7 @@ echo "Starting backend services"
 echo "========================================"
 
 # Inject runtime BASE_PATH into frontend if configured
-if [ -n "$BASE_PATH" ]; then
+if [ -n "${BASE_PATH:-}" ]; then
     echo "Injecting BASE_PATH: $BASE_PATH"
     find /app/html -name "index.html" -exec sed -i "s|window.__TERMIX_BASE_PATH__ = \"\"|window.__TERMIX_BASE_PATH__ = \"$BASE_PATH\"|g" {} \;
 fi
