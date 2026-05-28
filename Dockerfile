@@ -53,7 +53,8 @@ WORKDIR /app
 
 ENV DATA_DIR=/app/data \
     PORT=8080 \
-    NODE_ENV=production
+    NODE_ENV=production \
+    TZ=Asia/Shanghai
 
 RUN apt-get update && apt-get install -y \
     nginx \
@@ -65,7 +66,10 @@ RUN apt-get update && apt-get install -y \
     curl \
     unzip \
     rclone \
+    tzdata \
     && update-ca-certificates \
+    && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 rclone

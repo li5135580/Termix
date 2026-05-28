@@ -52,10 +52,13 @@ WORKDIR /app
 
 ENV DATA_DIR=/app/data \
     PORT=8080 \
-    NODE_ENV=production
+    NODE_ENV=production \
+    TZ=Asia/Shanghai
 
-RUN apt-get update && apt-get install -y nginx gettext-base openssl ca-certificates gosu wget && \
+RUN apt-get update && apt-get install -y nginx gettext-base openssl ca-certificates gosu wget tzdata && \
     update-ca-certificates && \
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /app/data /app/uploads /app/data/.opk /app/nginx /tmp/nginx && \
     chown -R node:node /app /tmp/nginx && \

@@ -48,6 +48,7 @@ fi
 # ENV
 # =========================
 
+export TZ=${TZ:-Asia/Shanghai}
 export PORT=${PORT:-8080}
 export ENABLE_SSL=${ENABLE_SSL:-false}
 export SSL_PORT=${SSL_PORT:-8443}
