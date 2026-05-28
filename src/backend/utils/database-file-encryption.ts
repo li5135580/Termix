@@ -291,8 +291,13 @@ class DatabaseFileEncryption {
           throw new Error("v1 encrypted file missing required salt field");
         }
         const salt = Buffer.from(metadata.salt, "hex");
-        const fixedSeed =
-          process.env.DB_FILE_KEY || "termix-database-file-encryption-seed-v1";
+        const fixedSeed = process.env.DB_FILE_KEY;
+        if (!fixedSeed) {
+          throw new Error(
+            "DB_FILE_KEY environment variable is required. " +
+            "Generate a strong random secret and set it in your Render Environment Variables."
+          );
+        }
         key = crypto.pbkdf2Sync(fixedSeed, salt, 100000, 32, "sha256");
       } else {
         throw new Error(`Unsupported encryption version: ${metadata.version}`);

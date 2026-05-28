@@ -501,8 +501,13 @@ class UserCrypto {
   }
 
   private deriveOIDCSystemKey(userId: string): Buffer {
-    const systemSecret =
-      process.env.OIDC_SYSTEM_SECRET || "termix-oidc-system-secret-default";
+    const systemSecret = process.env.OIDC_SYSTEM_SECRET;
+    if (!systemSecret) {
+      throw new Error(
+        "OIDC_SYSTEM_SECRET environment variable is required. " +
+        "Generate a strong random secret and set it in your Render Environment Variables."
+      );
+    }
     const salt = Buffer.from(userId, "utf8");
     return crypto.pbkdf2Sync(
       systemSecret,
