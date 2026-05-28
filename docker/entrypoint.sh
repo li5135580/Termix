@@ -204,7 +204,10 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = $DOMAIN
 DNS.2 = localhost
+DNS.3 = 127.0.0.1
 IP.1 = 127.0.0.1
+IP.2 = ::1
+IP.3 = 0.0.0.0
 EOF
 
         openssl genrsa -out "$SSL_KEY_PATH" 2048
@@ -284,6 +287,13 @@ echo "========================================"
 echo "Starting backend services"
 echo "========================================"
 
+# Inject runtime BASE_PATH into frontend if configured
+if [ -n "$BASE_PATH" ]; then
+    echo "Injecting BASE_PATH: $BASE_PATH"
+    find /app/html -name "index.html" -exec sed -i "s|window.__TERMIX_BASE_PATH__ = \"\"|window.__TERMIX_BASE_PATH__ = \"$BASE_PATH\"|g" {} \;
+fi
+
+echo "Starting backend services..."
 cd /app
 
 export NODE_ENV=production
