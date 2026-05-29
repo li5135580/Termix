@@ -98,8 +98,8 @@ COPY --chown=node:node --from=backend-builder /app/dist/backend ./dist/backend
 COPY --chown=node:node package.json ./
 
 # 复制同步脚本
-COPY sync.sh /sync.sh
-COPY restore.sh /restore.sh
+COPY deploy/sync.sh /sync.sh
+COPY deploy/restore.sh /restore.sh
 
 RUN chmod +x /sync.sh
 RUN chmod +x /restore.sh
