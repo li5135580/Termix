@@ -1,0 +1,107 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+
+jobs:
+  auto-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    if: github.event.head_commit.author.name != 'github-actions[bot]'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if release needed
+        id: check
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          # Check if tag already exists
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag v${VERSION} already exists, skipping"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Will create release v${VERSION}"
+          fi
+
+      - name: Create Tag
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git tag -a "v${{ steps.check.outputs.version }}" -m "v${{ steps.check.outputs.version }}"
+          git push origin "v${{ steps.check.outputs.version }}"
+
+      - name: Create Release
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.check.outputs.version }}';
+            const imageName = 'ghcr.io/${{ github.repository }}'.toLowerCase();
+
+            const body = `## 🐳 Docker Image
+
+            \`${imageName}:latest\`
+
+            \`\`\`bash
+            docker pull ${imageName}:latest
+            \`\`\`
+
+            ---
+
+            ## 🚀 Quick Start
+
+            \`\`\`bash
+            docker run -d \\
+              --name termix \\
+              -p 8080:8080 \\
+              -p 30001-30006:30001-30006 \\
+              -v termix-data:/app/data \\
+              -e R2_ACCESS_KEY_ID=your_key_id \\
+              -e R2_SECRET_ACCESS_KEY=your_secret_key \\
+              -e R2_ENDPOINT=your_account_id.r2.cloudflarestorage.com \\
+              -e OIDC_SYSTEM_SECRET=\$(openssl rand -hex 32) \\
+              -e DB_FILE_KEY=\$(openssl rand -hex 32) \\
+              -e TZ=Asia/Shanghai \\
+              ${imageName}:latest
+            \`\`\`
+
+            ---
+
+            ## 🔧 Required Environment Variables
+
+            | Variable | Description |
+            |---|---|
+            | \`OIDC_SYSTEM_SECRET\` | OIDC token signing key (\`openssl rand -hex 32\`) |
+            | \`DB_FILE_KEY\` | Database encryption seed (\`openssl rand -hex 32\`) |
+            | \`R2_ACCESS_KEY_ID\` | Cloudflare R2 access key |
+            | \`R2_SECRET_ACCESS_KEY\` | Cloudflare R2 secret key |
+            | \`R2_ENDPOINT\` | Cloudflare R2 endpoint |
+
+            ## Optional
+
+            | Variable | Default | Description |
+            |---|---|---|
+            | \`PORT\` | \`8080\` | Web UI port |
+            | \`TZ\` | \`Asia/Shanghai\` | Timezone |
+            | \`PUID\` / \`PGID\` | \`1000\` | User/Group ID |
+            | \`BASE_PATH\` | (empty) | Reverse proxy sub-path |
+            `;
+
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${version}`,
+              name: `v${version}`,
+              body: body,
+              draft: false,
+              prerelease: false,
+            });
