@@ -108,6 +108,9 @@ envsubst '${PORT} ${SSL_PORT} ${SSL_CERT_PATH} ${SSL_KEY_PATH}' \
 # Writable Check
 # =========================
 
+mkdir -p /app/data /app/uploads /app/data/.opk /app/data/acme-webroot/.well-known/acme-challenge
+chmod 755 /app/data /app/uploads /app/data/.opk 2>/dev/null || true
+
 echo "========================================"
 echo "Checking directories"
 echo "========================================"
