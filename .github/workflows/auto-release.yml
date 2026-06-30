@@ -96,6 +96,18 @@ jobs:
             | \`TZ\` | \`Asia/Shanghai\` | Timezone |
             | \`PUID\` / \`PGID\` | \`1000\` | User/Group ID |
             | \`BASE_PATH\` | (empty) | Reverse proxy sub-path |
+
+            ---
+
+            ## 🇨🇳 v${version} 更新内容
+
+            - 合并上游 v${version}
+            - 保留所有 Fork 定制（R2 同步、SSH 优化、安全增强、北京时区）
+
+            ## 🇬🇧 v${version} Changes
+
+            - Merged upstream v${version}
+            - All fork customizations preserved (R2 sync, SSH tuning, security hardening, CST timezone)
             `;
 
             await github.rest.repos.createRelease({
