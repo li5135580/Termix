@@ -29,6 +29,7 @@ if [ "$(id -u)" = "0" ]; then
         usermod -o -u "$PUID" node 2>/dev/null || true
 
         mkdir -p /home/node/.config/rclone
+        chown -R node:node /app/data /app/uploads /app/html /tmp/nginx 2>/dev/null || true
 
         chown -R node:node \
             /app/data \
